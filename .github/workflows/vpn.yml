@@ -1129,9 +1129,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -x
           mkdir -p app/libs
-          gh release download --repo 2dust/AndroidLibXrayLite --pattern "*.aar" --dir app/libs --clobber
-          mv app/libs/*.aar app/libs/libv2ray.aar
+          # берём ссылку на .aar из последнего релиза, где он реально приложен
+          URL=$(gh api "repos/2dust/AndroidLibXrayLite/releases?per_page=15" \
+            --jq '[.[] | .assets[] | select(.name | endswith(".aar"))][0].browser_download_url')
+          echo "URL=$URL"
+          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+            echo "В релизах AndroidLibXrayLite нет .aar" >&2
+            gh api "repos/2dust/AndroidLibXrayLite/releases?per_page=5" --jq '.[] | {tag: .tag_name, assets: [.assets[].name]}'
+            exit 1
+          fi
+          curl -fL --retry 3 -o app/libs/libv2ray.aar "$URL"
           ls -lh app/libs
 
       - name: Build APK
